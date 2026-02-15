@@ -1,6 +1,6 @@
 # ADB Emulator on Kubernetes (Kind)
 
-Run Android Cuttlefish virtual devices on a local Kubernetes cluster using Kind.
+Run a headless Android emulator (Android 14) on a local Kubernetes cluster using Kind. Works on macOS and Linux — no KVM required.
 
 ## Prerequisites
 
@@ -11,62 +11,70 @@ Run Android Cuttlefish virtual devices on a local Kubernetes cluster using Kind.
 ## Quick Start
 
 ```bash
-# Create cluster, build image, and deploy
 bash commands.sh
 ```
 
 This will:
-1. Create a Kind cluster with port mappings for WebRTC (8443) and ADB (6520)
-2. Build the Cuttlefish Docker image (Debian 12 + Cuttlefish v1.41.0)
+1. Create a Kind cluster with ADB port mapping (5555)
+2. Build the Android Emulator Docker image (~3GB, includes Android 14 system image)
 3. Load the image into Kind
-4. Deploy the namespace, deployment, and service
+4. Deploy the emulator pod and service
 
-## Check Status
+## Connect via ADB
 
 ```bash
-kubectl -n android-emulation get pods
-kubectl -n android-emulation logs -f deployment/cuttlefish
+# Wait for the emulator to boot (5-10 min without KVM)
+kubectl -n android-emulation logs -f deployment/android-emulator
+
+# Once booted, connect from your host
+adb connect localhost:5555
+
+# Verify
+adb devices
+adb shell getprop ro.build.display.id
 ```
 
-## Loading Android Images
+## How It Works
 
-The container starts with Cuttlefish installed but needs Android system images to run a virtual device.
-
-1. Go to [Android CI](https://ci.android.com/)
-2. Navigate to **Branches → aosp-main → Grid**
-3. Click a green build for `aosp_cf_x86_64_phone-userdebug`
-4. Download:
-   - `aosp_cf_x86_64_phone-img-XXXXXX.zip`
-   - `cvd-host_package.tar.gz`
-5. Copy images into the running pod:
-   ```bash
-   POD=$(kubectl -n android-emulation get pod -l app=cuttlefish -o jsonpath='{.items[0].metadata.name}')
-   kubectl -n android-emulation cp ./aosp_cf_x86_64_phone-img-XXXXXX.zip $POD:/home/vsoc-01/android/
-   kubectl -n android-emulation exec $POD -- unzip /home/vsoc-01/android/aosp_cf_x86_64_phone-img-XXXXXX.zip -d /home/vsoc-01/android/
-   ```
+The emulator runs headless (`-no-window`) with software rendering (`swiftshader`). On hosts without KVM (like macOS Docker), it uses QEMU's TCG software emulation — slower but fully functional.
 
 ## Architecture
 
 ```
-├── Dockerfile              # Debian 12 + Cuttlefish from Google Artifact Registry
-├── start-cuttlefish.sh     # Entrypoint: detects cvd/launch_cvd, launches emulator
+├── Dockerfile              # Debian 12 + Android SDK + emulator + system image
+├── start-emulator.sh       # Entrypoint: launches emulator, waits for boot
 ├── commands.sh             # One-command setup script
-├── kind.yaml               # Kind cluster config with port mappings
+├── kind.yaml               # Kind cluster config with ADB port mapping
 └── manifests/
     ├── namespace.yaml      # android-emulation namespace
     ├── deployment.yaml     # Privileged pod with Recreate strategy
-    └── service.yaml        # NodePort service (WebRTC: 30443, ADB: 30550)
+    └── service.yaml        # NodePort service (ADB: 30555 → 5555)
 ```
 
-## Exposed Ports
+## Useful Commands
 
-| Port  | NodePort | Description |
-|-------|----------|-------------|
-| 8443  | 30443    | WebRTC UI   |
-| 6520  | 30550    | ADB         |
+```bash
+# Check pod status
+kubectl -n android-emulation get pods
+
+# Stream logs
+kubectl -n android-emulation logs -f deployment/android-emulator
+
+# Run shell commands on the emulator
+adb shell
+
+# Install an APK
+adb install app.apk
+
+# Take a screenshot
+adb shell screencap /sdcard/screen.png && adb pull /sdcard/screen.png
+
+# Restart the emulator
+kubectl -n android-emulation rollout restart deployment android-emulator
+```
 
 ## Cleanup
 
 ```bash
-kind delete cluster --name cuttlefish-cluster
+kind delete cluster --name android-emulator
 ```

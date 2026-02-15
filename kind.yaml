@@ -1,14 +1,9 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: cuttlefish-cluster
+name: android-emulator
 nodes:
 - role: control-plane
   extraPortMappings:
-  # Map WebRTC HTTPS port
-  - containerPort: 30443
-    hostPort: 8443
-    protocol: TCP
-  # Map ADB port (optional, for debugging)
-  - containerPort: 30550
-    hostPort: 6520
+  - containerPort: 30555
+    hostPort: 5555
     protocol: TCP

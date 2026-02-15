@@ -1,55 +1,46 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cuttlefish
+  name: android-emulator
   namespace: android-emulation
   labels:
-    app: cuttlefish
+    app: android-emulator
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: cuttlefish
+      app: android-emulator
   template:
     metadata:
       labels:
-        app: cuttlefish
+        app: android-emulator
     spec:
       containers:
-      - name: cuttlefish
-        image: cuttlefish:v1
-        imagePullPolicy: Never  # Use local image from KIND
+      - name: emulator
+        image: android-emulator:v1
+        imagePullPolicy: Never
         securityContext:
-          privileged: true  # Required even without KVM for device access
+          privileged: true
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
             memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
             cpu: "2"
         ports:
-        - containerPort: 8443
-          name: webrtc
+        - containerPort: 5554
+          name: emulator
           protocol: TCP
-        - containerPort: 6520
+        - containerPort: 5555
           name: adb
           protocol: TCP
-        env:
-        - name: CUTTLEFISH_INSTANCE
-          value: "1"
         volumeMounts:
-        - name: cuttlefish-data
-          mountPath: /home/vsoc-01/cuttlefish_runtime
-        # Optional: Mount Android images if you have them
-        # - name: android-images
-        #   mountPath: /home/vsoc-01/android
+        - name: emulator-data
+          mountPath: /tmp/android-emulator
       volumes:
-      - name: cuttlefish-data
+      - name: emulator-data
         emptyDir:
           sizeLimit: 10Gi
-      # - name: android-images
-      #   hostPath:
-      #     path: /path/to/your/android/images

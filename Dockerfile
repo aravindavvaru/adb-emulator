@@ -1,50 +1,54 @@
 FROM debian:12
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${ANDROID_SDK_ROOT}/emulator:${PATH}"
 
-# Install base dependencies
+# Install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    gnupg \
-    adb \
-    sudo \
-    && update-ca-certificates \
+    unzip \
+    openjdk-17-jdk-headless \
+    libpulse0 \
+    libgl1 \
+    libnss3 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxi6 \
+    libxtst6 \
+    libglib2.0-0 \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
-# Add the official Cuttlefish apt repository from Google Artifact Registry
-RUN curl -fsSL https://us-apt.pkg.dev/doc/repo-signing-key.gpg | apt-key add - && \
-    echo "deb https://us-apt.pkg.dev/projects/android-cuttlefish-artifacts android-cuttlefish main" \
-    > /etc/apt/sources.list.d/cuttlefish.list
+# Download Android command-line tools
+RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+    -o /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    mv ${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools ${ANDROID_SDK_ROOT}/cmdline-tools/latest && \
+    rm /tmp/cmdline-tools.zip
 
-# Install Cuttlefish packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    cuttlefish-base \
-    cuttlefish-user \
-    && rm -rf /var/lib/apt/lists/*
+# Accept licenses and install SDK components
+RUN yes | sdkmanager --licenses > /dev/null 2>&1 && \
+    sdkmanager --install \
+    "platform-tools" \
+    "emulator" \
+    "platforms;android-34" \
+    "system-images;android-34;google_apis;x86_64"
 
-# Verify installation
-RUN echo "=== Checking installations ===" && \
-    which launch_cvd && echo "launch_cvd found at $(which launch_cvd)" || echo "launch_cvd not found" && \
-    which cvd && echo "cvd found at $(which cvd)" || echo "cvd not found" && \
-    dpkg -l | grep -i cuttlefish
+# Create AVD (no KVM needed with -no-accel at runtime)
+RUN echo "no" | avdmanager create avd \
+    -n android34 \
+    -k "system-images;android-34;google_apis;x86_64" \
+    -d "pixel_6" \
+    --force
 
-# Create user and add to required groups
-RUN useradd -m -s /bin/bash vsoc-01 && \
-    usermod -aG kvm vsoc-01 2>/dev/null || true && \
-    usermod -aG cvdnetwork vsoc-01 2>/dev/null || true
+WORKDIR /opt/android-sdk
 
-# Create directories
-RUN mkdir -p /home/vsoc-01/android && \
-    mkdir -p /home/vsoc-01/cuttlefish_runtime && \
-    chown -R vsoc-01:vsoc-01 /home/vsoc-01
+EXPOSE 5554 5555 5037
 
-WORKDIR /home/vsoc-01
+COPY start-emulator.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/start-emulator.sh
 
-EXPOSE 8443 6520 6444 15550
-
-COPY start-cuttlefish.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/start-cuttlefish.sh
-
-USER vsoc-01
-ENTRYPOINT ["/usr/local/bin/start-cuttlefish.sh"]
+ENTRYPOINT ["/usr/local/bin/start-emulator.sh"]
