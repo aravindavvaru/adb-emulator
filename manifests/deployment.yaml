@@ -34,7 +34,7 @@ spec:
         - containerPort: 5554
           name: emulator
           protocol: TCP
-        - containerPort: 5555
+        - containerPort: 5556
           name: adb
           protocol: TCP
         volumeMounts:

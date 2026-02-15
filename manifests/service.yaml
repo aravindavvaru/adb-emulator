@@ -10,6 +10,6 @@ spec:
   ports:
   - name: adb
     port: 5555
-    targetPort: 5555
+    targetPort: 5556
     nodePort: 30555
     protocol: TCP

@@ -92,5 +92,10 @@ if [ $ELAPSED -ge $TIMEOUT ]; then
     echo "It may still be booting. Check: adb devices"
 fi
 
+# Expose ADB on 0.0.0.0:5556 so Kubernetes service can reach it.
+# The emulator binds ADB to 127.0.0.1:5555 only, so we use socat to bridge.
+echo "Exposing ADB on 0.0.0.0:5556..."
+socat TCP-LISTEN:5556,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:5555 &
+
 # Keep container alive, follow emulator process
 wait $EMULATOR_PID
